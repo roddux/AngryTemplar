@@ -1,0 +1,20 @@
+frida and firefox
+  a match made in heaven
+
+frida injects into a firefox process
+  probably a render process
+
+create a page with a Dharma-created DOM
+apply a dharma-generated CSS string to the DOM
+loop the following for ~1000 repititions or so:
+  find the function that takes CSS input and parses it
+  hook it
+  send() message back to Python using Frida api
+  python interfaces with radamsa to mess up the CSS
+  send() the message back to Frida, in the browser
+  browser continues with CSS parse function
+window.reload() the page after ~1000 reps for a new DOM
+
+advantages over in-browser fuzzing:
+  possibly faster than fuzzing the CSS in-browser ?
+  leverage radamsa and dharma grammars without remaking in js 
