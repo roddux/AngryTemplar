@@ -21,46 +21,42 @@ rpc.exports.hookFunction = function () {
 		ptr(funcAddr),
 		{
 			onEnter: function(args) {
-				var struct = Memory.readPointer(args[1]);
-				console.log("ngx_buf_t: ", struct);
+				var struct = args[1];
+				//console.log("ngx_buf_t: ", struct); // location of the argument structure
 				
-				var bufPos  = new NativePointer(struct);
-				console.log("u_pos:     ", bufPos);
+				var bufPos = Memory.readPointer(struct.add(0x0)); // bufPos is the first pointer
+				//console.log("u_pos:     ", bufPos);
 				
-//				var bufLast = new NativePointer(struct).add(0x04);
-//				console.log("u_last:    ", bufLast);
-				
-//				var bufStart = new NativePointer(struct).add(0x10);
-//				console.log("u_start:   ", bufStart);
-				
-//				var bufEnd = new NativePointer(struct).add(0x14);
-//				console.log("u_end:     ", bufEnd);
-				
-//				var length = bufLast.sub(bufPos);
-//				console.log("length:    ", length);
+				var bufLast = Memory.readPointer(struct.add(0x8)); // bufLast is the second
+				//console.log("u_last:    ", bufLast);
 
-				// just send teh wh0l damn thing
-				//send("mem",Memory.readByteArray(bufPos,32));
+				var bufStart = Memory.readPointer(struct.add(0x20)); // bufStart is 5th param
+				//console.log("u_start:   ", bufStart);
+				
+				var bufEnd = Memory.readPointer(struct.add(0x28)); // bufEnd is 6th
+				//console.log("u_end:     ", bufEnd);
 
-				// try and send just line by line
-				//var c = Memory.readByteArray(bufPos, 1);
-				var c = Memory.readU8(bufPos); 
-				console.log(c);
-				var j = 0;
-				var arr = []
-				while (c != 13) {
-					arr.push(c);
-					j += 1;
-					//c = Memory.readByteArray(new NativePointer(bufPos).add(j), 1);
-					c = Memory.readU8(new NativePointer(bufPos).add(j));
-				}
-				var z="";arr.forEach(function(y){z+=String.fromCharCode(y)});
-				console.log(arr);
-				console.log("Got header: '"+z+"'");
+				var bufLen = bufEnd-bufStart;
+				//console.log("end-start: ", bufEnd-bufStart); // 1024 bytes normally
 
-				//console.log(Memory.readByteArray(bufPos, length.toInt32()));
-				//send(args);
-				console.log("\n");
+				// Send the memory chunk to Python
+				send("mem", Memory.readByteArray(bufStart, bufLen));
+				var newBuf = null;
+				var op = recv("payload", function(value) {
+					var hex = value.payload;
+					var typedArray = new Uint8Array(
+						hex.match(/[\da-f]{2}/gi).map(
+							function (h) { return parseInt(h, 16) }
+						)
+					);
+					try {
+						Memory.writeByteArray(bufStart, typedArray.buffer);
+					} catch (e){}
+				});
+				op.wait();
+				// Python calls radamsa to fuck with the chunk and sends it back
+				// overwrite the existing chunk with our new one
+				// divine moment of truth
 			}
 		}
 	);
@@ -81,10 +77,10 @@ rpc.exports.hookFunction = function () {
 /*
 typedef struct ngx_buf_s  ngx_buf_t;
 struct ngx_buf_s {
-    u_char          *pos;
-    u_char          *last;
-    off_t            file_pos;
-    off_t            file_last;
+    u_char          *pos;       
+    u_char          *last;      
+    off_t            file_pos; 
+    off_t            file_last; 
     u_char          *start;         // start of buffer
     u_char          *end;           // end of buffer
     ngx_buf_tag_t    tag;
